@@ -41,7 +41,132 @@ state是不固定的东西，随处都可以修改更新。
 ###二.如何DEBUG
 
 ###三.如何使用Navigator
+一切的SPA(单页面应用)都离不开路由系统，Navigator是RN提供的一个路由工具，不过缺陷是没有预设一个路由配置文件，所以导致整个结构类似goto语法的，你可以跳转到任意的页面。先来一个最简单的Navigator:
+	
+	var {
+		View,
+		Navigator
+	} = React;
+	var FirstPageComponent = require('./FirstPageComponent');
+	
+	var SampleComponent = React.createClass({
+		render: function() {
+			var defaultName = 'FirstPageComponent';
+			var defaultComponent = FirstPageComponent;
+			return (
+	        <Navigator
+	          initialRoute={{ name: defaultName, component: defaultComponent }}
+	          configureScene={() => {
+	            return Navigator.SceneConfigs.VerticalDownSwipeJump;
+	          }}
+	          renderScene={(route, navigator) => {
+	            let Component = route.component;
+	            if(route.component) {
+	              return <Component {...route.params} navigator={navigator} />
+	            }
+	          }} />
+			);
 
+		}
+	});
+这里来逐行解释代码的功效:
+
+第三行: 一个初始首页的component名字，比如我写了一个component叫HomeComponent，那么这个name就是这个组件的名字【HomeComponent】了。
+
+第四行: 这个组件的Class，用来一会儿实例化成 <Component />标签
+	
+第七行: initialRoute={{ name: defaultName, component: defaultComponent }} 这个指定了默认的页面，也就是启动app之后会看到界面的第一屏。 需要填写两个参数: name 跟 component。
+
+第八，九，十行:           configureScene={() => {
+            return Navigator.SceneConfigs.VerticalDownSwipeJump;
+          }} 这个是页面之间跳转时候的动画，具体有哪些？可以看这个目录下，有源代码的: node_modules/react-native/Libraries/CustomComponents/Navigator/NavigatorSceneConfigs.js
+          
+最后的几行: renderScene={(route, navigator) => {
+            let Component = route.component;
+            if(route.component) {
+              return <Component {...route.params} navigator={navigator} />
+            }
+          }} />
+        );
+        
+这里是每个人最疑惑的，我们先看到回调里的两个参数:route, navigator。通过打印我们发现route里其实就是我们传递的name,component这两个货，navigator是一个Navigator的对象，为什么呢，因为它有push pop jump...等方法，这是我们等下用来跳转页面用的那个navigator对象。   
+
+	if(route.component) { 
+		return <Component {...route.params} navigator={navigator} />
+	}
+这里有一个判断，也就是如果传递进来的component存在，那我们就是返回一个这个component，结合前面 initialRoute 的参数，我们就是知道，这是一个会被render出来给用户看到的component，然后navigator作为props传递给了这个component。
+
+所以下一步，在这个FirstPageComponent里面，我们可以直接拿到这个 props.navigator:
+
+	var {
+		View,
+		Text,
+		TouchableOpacity
+	} = React;
+	
+	var SecondPageComponent = require('./SecondPageComponent');
+
+	var FirstPageComponent = React.create({
+		getInitialState: function() {
+			return {};
+		},
+		componentDidMount: function() {
+		},
+		_pressButton: function() {
+			const { navigator } = this.props;
+			//或者写成 const navigator = this.props.navigator;
+			//为什么这里可以取得 props.navigator?请看上文:
+			//<Component {...route.params} navigator={navigator} />
+			//这里传递了navigator作为props
+			if(navigator) {
+				navigator.push({
+					name: 'SecondPageComponent',
+					component: SecondPageComponent,
+				})
+			}
+		}
+		render: function() {
+			<View>
+				<TouchableOpacity onPress={this._pressButton}>
+					<Text>点我跳转</Text>
+				</TouchableOpacity>
+			</View>
+		}
+	});
+这个里面创建了一个可以点击的区域，让我们点击可以跳到SecondPageComponent这个页面，实现页面的跳转。
+现在来创建SecondPageComponent，并且让它可以再跳回FirstPageComponent:
+
+	var {
+		View,
+		Text,
+		TouchableOpacity,
+	} = React;
+	
+	var FirstPageComponent = require('./FirstPageComponent');
+	
+	var SecondPageComponent = React.create({
+		getInitialState: function() {
+			return {};
+		},
+		componentDidMount: function() {
+		},
+		_pressButton: function() {
+			const { navigator } = this.props;
+			if(navigator) {
+				//很熟悉吧，入栈出栈~
+				navigator.pop();
+			}
+		}
+		render: function() {
+			<View>
+				<TouchableOpacity onPress={this._pressButton}>
+					<Text>点我跳回去</Text>
+				</TouchableOpacity>
+			</View>
+		}
+	});
+大功告成，能进能出了。
+然后下面要讨论，怎么传递参数过去，或者从对方获取参数:
 ###四.如何使用react-native-storage
 
 ###五.回调在RN中的应用
