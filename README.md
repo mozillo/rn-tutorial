@@ -1,4 +1,4 @@
-# Awesome-React-Native-Tutorial
+# Awesome-React-Native-Tutorial,站在初学者的角度去理解问题
 一个由新手写的ReactNative新手入门的指南
 
 ##一.如何区分props跟state 以及防止因为理解不当出现的奇怪的报错
