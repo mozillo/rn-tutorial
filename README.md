@@ -166,7 +166,259 @@ state是不固定的东西，随处都可以修改更新。
 		}
 	});
 大功告成，能进能出了。
-然后下面要讨论，怎么传递参数过去，或者从对方获取参数:
+
+关于官方文档里有个东西，这里说一下:
+
+	getCurrentRoutes() - 获取当前栈里的路由，也就是push进来，没有pop掉的那些
+	jumpBack() - 跳回之前的路由，当然前提是保留现在的，还可以再跳回来，会给你保留原样。
+    jumpForward() - 上一个方法不是调到之前的路由了么，用这个跳回来就好了
+    jumpTo(route) - Transition to an existing scene without unmounting
+    push(route) - Navigate forward to a new scene, squashing any scenes that you could jumpForward to
+    pop() - Transition back and unmount the current scene
+    replace(route) - Replace the current scene with a new route
+    replaceAtIndex(route, index) - Replace a scene as specified by an index
+    replacePrevious(route) - Replace the previous scene
+    immediatelyResetRouteStack(routeStack) - Reset every scene with an array of routes
+    popToRoute(route) - Pop to a particular scene, as specified by its route. All scenes after it will be unmounted
+    popToTop() - Pop to the first scene in the stack, unmounting every other scene
+    
+这些都是navigator可以用的public method,就是跳转用的，里面有些带参数的XXX(route)，新手第一次看这个文档会疑惑，这个route参数是啥呢，这个route就是:
+	
+	renderScene={(route, navigator) => 
+这里的route，最基本的route就是:
+	
+	var route = {
+		name: 'LoginComponent',
+		component: LoginComponent,
+	}
+这种格式。这个地方有点模糊的，在这里先说清楚了。
+
+然后下面要讨论，怎么传递参数过去，或者从对方获取参数。
+传递参数，通过push就可以了。
+比如在一个 press的事件里:
+	
+	//FirstPageComponent.js
+	var {
+   		View,
+   	 	Text,
+    	TouchableOpacity
+	} = React;
+
+	var SecondPageComponent = require('./SecondPageComponent');
+
+	var FirstPageComponent = React.create({
+	    getInitialState: function() {
+	        return {
+	        	id: 2,
+	        };
+	    },
+	    componentDidMount: function() {
+	    },
+	    _pressButton: function() {
+	        const { navigator } = this.props;
+	        if(navigator) {
+	            navigator.push({
+	                name: 'SecondPageComponent',
+	                component: SecondPageComponent,
+	                //这里多出了一个 params 其实来自于<Navigator 里的一个方法的参数...
+	                params: {
+	                	id: this.state.id
+	                }
+	            });
+	        }
+	    }
+	    render: function() {
+	        <View>
+	            <TouchableOpacity onPress={this._pressButton}>
+	                <Text>点我跳转并传递id</Text>
+	            </TouchableOpacity>
+	        </View>
+	    }
+	});
+	
+params的来历:
+	
+	// index.ios.js
+	<Navigator
+          initialRoute={{ name: defaultName, component: defaultComponent }}
+          configureScene={() => {
+            return Navigator.SceneConfigs.VerticalDownSwipeJump;
+          }}
+          renderScene={(route, navigator) => {
+            let Component = route.component;
+            if(route.component) {
+            	//这里有个 { ...route.params }
+            	return <Component {...route.params} navigator={navigator} />
+            }
+          }} />
+这个语法是把 routes.params 里的每个key 作为props的一个属性:
+
+	
+	navigator.push({
+		name: 'SecondPageComponent',
+		component: SecondPageComponent,
+    	params: {
+    		id: this.state.id
+    	}
+	});
+	
+这里的 params.id 就变成了 <Navigator id={} 传递给了下一个页面。
+所以 SecondPageComponent就应该这样取得 id：
+	
+	//SecondPageComponent.js
+	var {
+		View,
+		Text,
+		TouchableOpacity,
+	} = React;
+	
+	var FirstPageComponent = require('./FirstPageComponent');
+	
+	var SecondPageComponent = React.create({
+		getInitialState: function() {
+			return {
+				id: null
+			};
+		},
+		componentDidMount: function() {
+			//这里获取从FirstPageComponent传递过来的参数: id
+			this.setState({
+				id: this.props.id
+			});
+		},
+		_pressButton: function() {
+			const { navigator } = this.props;
+			if(navigator) {
+				navigator.pop();
+			}
+		}
+		render: function() {
+			<View>
+				<Text>获得的参数: id={ this.state.id }</Text>
+				<TouchableOpacity onPress={this._pressButton}>
+					<Text>点我跳回去</Text>
+				</TouchableOpacity>
+			</View>
+		}
+	});
+
+这样在页面间传递的参数，就可以获取了。
+
+然后就是返回的时候，也需要传递参数回上一个页面:
+但是navigator.pop()并没有提供参数，因为pop()只是从 [路由1,路由2，路由3。。。]里把最后一个路由踢出去的操作，并不支持传递参数给倒数第二个路由，这里要用到一个概念，把上一个页面的实例或者回调方法，作为参数传递到当前页面来，在当前页面操作上一个页面的state:
+
+这是一个查询用户信息的例子，FirstPageComponent传递id到SecondPageComponent，然后SecondPageComponent返回user信息给FirstPageComponent
+
+	//FirstPageComponent.js
+	var {
+   		View,
+   	 	Text,
+    	TouchableOpacity
+	} = React;
+
+	var SecondPageComponent = require('./SecondPageComponent');
+
+	var FirstPageComponent = React.create({
+	    getInitialState: function() {
+	        return {
+	        	id: 2,
+	        	user: null,
+	        };
+	    },
+	    componentDidMount: function() {
+	    },
+	    _pressButton: function() {
+	    	var _this = this;
+	        const { navigator } = this.props;
+	        if(navigator) {
+	            navigator.push({
+	                name: 'SecondPageComponent',
+	                component: SecondPageComponent,
+	                params: {
+	                	id: this.state.id
+	                	//从SecondPageComponent获取user
+	                	getUser: function(user) {
+	                		_this.setState({
+	                			user: user
+	                		})
+	                	}
+	                }
+	            });
+	        }
+	    }
+	    render: function() {
+	    	if( this.state.user ) {
+				return(
+					<View>
+						<Text>用户信息: { JSON.stringify(this.state.user) }</Text>
+					</View>
+		    	);
+	    	}else {
+				return(
+					<View>
+						<TouchableOpacity onPress={this._pressButton}>
+						    <Text>查询ID为{ this.state.id }的用户信息</Text>
+						</TouchableOpacity>
+					</View>
+		    	);
+	    	}
+
+	    }
+	});
+	
+然后再操作SecondPageComponent:
+
+	//SecondPageComponent.js
+	
+	USER_MODELS = {
+		1: { name: 'mot', age: 23 },
+		2: { name: '晴明大大', age: 25 }
+	};
+	var {
+	    View,
+	    Text,
+	    TouchableOpacity,
+	} = React;
+	
+	var FirstPageComponent = require('./FirstPageComponent');
+	
+	var SecondPageComponent = React.create({
+	    getInitialState: function() {
+	        return {
+	            id: null
+	        };
+	    },
+	    componentDidMount: function() {
+	        //这里获取从FirstPageComponent传递过来的参数: id
+	        this.setState({
+	            id: this.props.id
+	        });
+	    },
+	    _pressButton: function() {
+			const { navigator } = this.props;
+   			
+			if(this.props.getUser) {
+				var user = USER_MODELS[this.props.id];
+				this.props.getUser(user);
+			}
+			    
+			if(navigator) {
+			    navigator.pop();
+			}
+	    }
+	    render: function() {
+	    	return(
+		        <View>
+		            <Text>获得的参数: id={ this.state.id }</Text>
+		            <TouchableOpacity onPress={this._pressButton}>
+		                <Text>点我跳回去</Text>
+		            </TouchableOpacity>
+		        </View>
+	      	);
+	    }
+	});
+
+看下效果如何吧。
 ###四.如何使用react-native-storage
 
 ###五.回调在RN中的应用
